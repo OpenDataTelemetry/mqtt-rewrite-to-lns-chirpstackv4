@@ -23,12 +23,13 @@ type LnsDownFields struct {
 	FPort     uint64 `json:"fPort"`
 }
 type LnsDownTags struct {
-	DeviceId   string `json:"deviceId"`
-	DeviceType string `json:"deviceType"`
-	Direction  string `json:"direction"`
-	Host       string `json:"host"`
-	Origin     string `json:"origin"`
-	Reference  string `json:"reference"`
+	Application string `json:"application"`
+	DeviceId    string `json:"deviceId"`
+	DeviceType  string `json:"deviceType"`
+	Direction   string `json:"direction"`
+	Host        string `json:"host"`
+	Origin      string `json:"origin"`
+	Reference   string `json:"reference"`
 }
 
 // type LnsDown struct {
@@ -43,10 +44,11 @@ type LnsDownTags struct {
 // }
 
 type LnsChirpstackV4Down struct {
-	DeviceId  string
-	Confirmed bool
-	FPort     uint64
-	Data      string
+	Application string
+	DeviceId    string
+	Confirmed   bool
+	FPort       uint64
+	Data        string
 	// Object any
 }
 
@@ -133,10 +135,26 @@ func main() {
 
 	for {
 		incoming := <-c
+		// Parse the Topic
 		t := strings.Split(incoming[0], "/")
 
+		// Parse the Message
+		json.Unmarshal([]byte(incoming[1]), &influxJsonLnsDown)
+		lnsChirpstackV4Down.Application = influxJsonLnsDown.Tags.Application
+		lnsChirpstackV4Down.DeviceId = influxJsonLnsDown.Tags.DeviceId
+		lnsChirpstackV4Down.Confirmed = influxJsonLnsDown.Fields.Confirmed
+		// a := influxJsonLnsDown.Fields
+		lnsChirpstackV4Down.FPort = influxJsonLnsDown.Fields.FPort
+		lnsChirpstackV4Down.Data = influxJsonLnsDown.Fields.Data
+		// fmt.Printf("RECEIVED MESSAGE DeviceId: %s\n", lnsChirpstackV4Down.DeviceId)
+		// fmt.Printf("RECEIVED MESSAGE Confirmed: %v\n", influxJsonLnsDown.Fields.Confirmed)
+		// fmt.Printf("RECEIVED MESSAGE FPort: %s\n", lnsChirpstackV4Down.FPort)
+		// fmt.Printf("RECEIVED MESSAGE Data: %s\n", lnsChirpstackV4Down.Data)
+		// fmt.Printf("RECEIVED MESSAGE RAW: %s\n", incoming[1])
+		// fmt.Printf("a: %s\n", a)
+
 		var chirpstackV4ApplicationId string
-		switch t[2] {
+		switch lnsChirpstackV4Down.Application {
 		case "DET":
 			chirpstackV4ApplicationId = "deb35cab-8a9a-42a9-b19e-0cd2ac859cc8"
 
@@ -165,28 +183,15 @@ func main() {
 			chirpstackV4ApplicationId = "a7d603f2-3de4-4516-82f5-3323a3a80467"
 		}
 
-		json.Unmarshal([]byte(incoming[1]), &influxJsonLnsDown)
-		lnsChirpstackV4Down.DeviceId = influxJsonLnsDown.Tags.DeviceId
-		lnsChirpstackV4Down.Confirmed = influxJsonLnsDown.Fields.Confirmed
-		// a := influxJsonLnsDown.Fields
-		lnsChirpstackV4Down.FPort = influxJsonLnsDown.Fields.FPort
-		lnsChirpstackV4Down.Data = influxJsonLnsDown.Fields.Data
-		// fmt.Printf("RECEIVED MESSAGE DeviceId: %s\n", lnsChirpstackV4Down.DeviceId)
-		// fmt.Printf("RECEIVED MESSAGE Confirmed: %v\n", influxJsonLnsDown.Fields.Confirmed)
-		// fmt.Printf("RECEIVED MESSAGE FPort: %s\n", lnsChirpstackV4Down.FPort)
-		// fmt.Printf("RECEIVED MESSAGE Data: %s\n", lnsChirpstackV4Down.Data)
-		fmt.Printf("RECEIVED MESSAGE RAW: %s\n", incoming[1])
-		// fmt.Printf("a: %s\n", a)
-
 		var sbPubMessage strings.Builder
 		sbPubMessage.WriteString(`{`)
-		sbPubMessage.WriteString(`devEui:`)
+		sbPubMessage.WriteString(`"devEui":"`)
 		sbPubMessage.WriteString(lnsChirpstackV4Down.DeviceId)
-		sbPubMessage.WriteString(`,confirmed:`)
+		sbPubMessage.WriteString(`","confirmed":`)
 		sbPubMessage.WriteString(strconv.FormatBool(lnsChirpstackV4Down.Confirmed))
-		sbPubMessage.WriteString(`,fPort:`)
+		sbPubMessage.WriteString(`,"fPort":`)
 		sbPubMessage.WriteString(strconv.FormatUint(uint64(lnsChirpstackV4Down.FPort), 10))
-		sbPubMessage.WriteString(`,data:"`)
+		sbPubMessage.WriteString(`,"data":"`)
 		sbPubMessage.WriteString(lnsChirpstackV4Down.Data)
 		sbPubMessage.WriteString(`"}`)
 
@@ -198,7 +203,8 @@ func main() {
 		sbPubTopic.WriteString(deviceId)
 		sbPubTopic.WriteString("/command/down")
 		// fmt.Printf("RECEIVED TOPIC: %s MESSAGE: %s\n", incoming[0], incoming[1])
-		fmt.Printf("Pub NS2: %s\n", sbPubMessage.String())
+		fmt.Printf("Pub NS2 Topic: %s\n", sbPubTopic.String())
+		fmt.Printf("Pub NS2 Message: %s\n", sbPubMessage.String())
 
 		token := pClient.Publish(sbPubTopic.String(), byte(mqttPubQos), false, sbPubMessage.String())
 		token.Wait()
